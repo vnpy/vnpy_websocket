@@ -101,14 +101,18 @@ class WebsocketClient:
         """
         停止客户端。
         """
-        coro = self._ws.close()
-        asyncio.run_coroutine_threadsafe(coro, self.loop)
+        if self._ws:
+            coro = self._ws.close()
+            asyncio.run_coroutine_threadsafe(coro, self.loop)
+
+        if self.loop.is_running():
+            self.loop.stop()
 
     def join(self):
         """
         等待后台线程退出。
         """
-        if self.thread.is_alive():
+        if self.thread and self.thread.is_alive():
             self.thread.join()
 
     def send_packet(self, packet: dict):
