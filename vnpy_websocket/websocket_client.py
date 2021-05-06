@@ -1,61 +1,44 @@
 import json
-import logging
 import sys
 import traceback
 from datetime import datetime
-from typing import Optional
-import asyncio
-import threading
+from types import coroutine
+from threading import Thread
+from asyncio import (
+    get_event_loop,
+    set_event_loop,
+    run_coroutine_threadsafe,
+    AbstractEventLoop
+)
 
-import aiohttp
-
-from vnpy.trader.utility import get_file_logger
+from aiohttp import ClientSession, ClientWebSocketResponse
 
 
 class WebsocketClient:
     """
-    Websocket API
+    针对各类Websocket API的异步客户端
 
-    After creating the client object, use start() to run worker and ping threads.
-    The worker thread connects websocket automatically.
-
-    Use stop to stop threads and disconnect websocket before destroying the client
-    object (especially when exiting the programme).
-
-    Default serialization format is json.
-
-    Callbacks to overrides:
-    * unpack_data
-    * on_connected
-    * on_disconnected
-    * on_packet
-    * on_error
-
-    After start() is called, the ping thread will ping server every 60 seconds.
-
-    If you want to send anything other than JSON, override send_packet.
+    * 重载unpack_data方法来实现数据解包逻辑
+    * 重载on_connected方法来实现连接成功回调处理
+    * 重载on_disconnected方法来实现连接断开回调处理
+    * 重载on_packet方法来实现数据推送回调处理
+    * 重载on_error方法来实现异常捕捉回调处理
     """
 
     def __init__(self):
         """Constructor"""
-        self.host = None
+        self._host: str = ""
 
-        self._ws = None
+        self._session: ClientSession = ClientSession()
+        self._ws: ClientWebSocketResponse = None
+        self._loop: AbstractEventLoop = None
 
-        self.session: aiohttp.ClientSession = aiohttp.ClientSession()
-        self.loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-        self.thread: threading.Thread = None
+        self._proxy: str = ""
+        self._ping_interval: int = 60  # 秒
+        self._header: dict = {}
 
-        self.proxy_host = None
-        self.proxy_port = None
-        self.ping_interval = 60  # seconds
-        self.header = {}
-
-        self.logger: Optional[logging.Logger] = None
-
-        # For debugging
-        self._last_sent_text = None
-        self._last_received_text = None
+        self._last_sent_text: str = ""
+        self._last_received_text: str = ""
 
     def init(
         self,
@@ -63,23 +46,19 @@ class WebsocketClient:
         proxy_host: str = "",
         proxy_port: int = 0,
         ping_interval: int = 60,
-        header: dict = None,
-        log_path: Optional[str] = None,
+        header: dict = None
     ):
         """
         初始化客户端
         """
-        self.host = host
-        self.ping_interval = ping_interval  # seconds
-        if log_path is not None:
-            self.logger = get_file_logger(log_path)
-            self.logger.setLevel(logging.DEBUG)
+        self._host = host
+        self._ping_interval = ping_interval
 
         if header:
-            self.header = header
+            self._header = header
 
         if proxy_host and proxy_port:
-            self.proxy = f"http://{proxy_host}:{proxy_port}"
+            self._proxy = f"http://{proxy_host}:{proxy_port}"
 
     def start(self):
         """
@@ -89,13 +68,8 @@ class WebsocketClient:
 
         请等待on_connected被调用后，再发送数据包。
         """
-        # 如果目前没有任何事件循环在运行，则启动后台线程
-        if not self.loop.is_running():
-            self.thread = threading.Thread(target=self.run)
-            self.thread.start()
-        # 否则直接在事件循环中加入新的任务
-        else:
-            asyncio.run_coroutine_threadsafe(self._run(), self.loop)
+        self._loop = start_event_loop()
+        run_coroutine_threadsafe(self._run(), self._loop)
 
     def stop(self):
         """
@@ -103,17 +77,16 @@ class WebsocketClient:
         """
         if self._ws:
             coro = self._ws.close()
-            asyncio.run_coroutine_threadsafe(coro, self.loop)
+            run_coroutine_threadsafe(coro, self._loop)
 
-        if self.loop.is_running():
-            self.loop.stop()
+        if self._loop and self._loop.is_running():
+            self._loop.stop()
 
     def join(self):
         """
         等待后台线程退出。
         """
-        if self.thread and self.thread.is_alive():
-            self.thread.join()
+        pass
 
     def send_packet(self, packet: dict):
         """
@@ -121,58 +94,13 @@ class WebsocketClient:
 
         如果需要发送非json数据，请重载实现本函数。
         """
-        text = json.dumps(packet)
+        text: str = json.dumps(packet)
         self._record_last_sent_text(text)
 
-        coro = self._ws.send_str(text)
-        asyncio.run_coroutine_threadsafe(coro, self.loop)
-        self._log('sent text: %s', text)
+        coro: coroutine = self._ws.send_str(text)
+        run_coroutine_threadsafe(coro, self._loop)
 
-    def _log(self, msg, *args):
-        """记录日志信息"""
-        logger = self.logger
-        if logger:
-            logger.debug(msg, *args)
-
-    def run(self):
-        """
-        在后台线程中运行的主函数
-        """
-        if not self.loop.is_running():
-            asyncio.set_event_loop(self.loop)
-            self.loop.run_forever()
-
-        asyncio.run_coroutine_threadsafe(self._run(), self.loop)
-
-    async def _run(self):
-        """
-        在事件循环中运行的主协程
-        """
-        self._ws = await self.session.ws_connect(
-            self.host,
-            proxy=self.proxy,
-            verify_ssl=False
-        )
-
-        self.on_connected()
-
-        async for msg in self._ws:
-            text = msg.data
-            print("recv", text)
-
-            self._record_last_received_text(text)
-
-            try:
-                data = self.unpack_data(text)
-            except ValueError as e:
-                print("websocket unable to parse data: " + text)
-                raise e
-
-            self._log('recv data: %s', data)
-            self.on_packet(data)
-
-    @staticmethod
-    def unpack_data(data: str):
+    def unpack_data(self, data: str):
         """
         对字符串数据进行json格式解包
 
@@ -180,31 +108,20 @@ class WebsocketClient:
         """
         return json.loads(data)
 
-    @staticmethod
-    def on_connected():
-        """
-        Callback when websocket is connected successfully.
-        """
+    def on_connected(self):
+        """连接成功回调"""
         pass
 
-    @staticmethod
-    def on_disconnected():
-        """
-        Callback when websocket connection is lost.
-        """
+    def on_disconnected(self):
+        """连接断开回调"""
         pass
 
-    @staticmethod
-    def on_packet(packet: dict):
-        """
-        Callback when receiving data from server.
-        """
+    def on_packet(self, packet: dict):
+        """收到数据回调"""
         pass
 
     def on_error(self, exception_type: type, exception_value: Exception, tb):
-        """
-        Callback when exception raised.
-        """
+        """触发异常回调"""
         sys.stderr.write(
             self.exception_detail(exception_type, exception_value, tb)
         )
@@ -213,9 +130,7 @@ class WebsocketClient:
     def exception_detail(
         self, exception_type: type, exception_value: Exception, tb
     ):
-        """
-        Print detailed exception information.
-        """
+        """异常信息格式化"""
         text = "[{}]: Unhandled WebSocket Error:{}\n".format(
             datetime.now().isoformat(), exception_type
         )
@@ -227,14 +142,58 @@ class WebsocketClient:
         )
         return text
 
+    async def _run(self):
+        """
+        在事件循环中运行的主协程
+        """
+        print(1)
+        print(self._host)
+        print(self._proxy)
+        self._ws = await self._session.ws_connect(
+            self._host,
+            proxy=self._proxy,
+            verify_ssl=False
+        )
+        print(2)
+
+        self.on_connected()
+
+        async for msg in self._ws:
+            text: str = msg.data
+            self._record_last_received_text(text)
+
+            try:
+                data: dict = self.unpack_data(text)
+                self.on_packet(data)
+            except Exception:
+                et, ev, tb = sys.exc_info()
+                self.on_error(et, ev, tb)
+
+        self.on_disconnected()
+
     def _record_last_sent_text(self, text: str):
-        """
-        Record last sent text for debug purpose.
-        """
+        """记录最近发出的数据字符串"""
         self._last_sent_text = text[:1000]
 
     def _record_last_received_text(self, text: str):
-        """
-        Record last received text for debug purpose.
-        """
+        """记录最近收到的数据字符串"""
         self._last_received_text = text[:1000]
+
+
+def start_event_loop() -> AbstractEventLoop:
+    """启动事件循环"""
+    loop: AbstractEventLoop = get_event_loop()
+
+    # 如果事件循环未运行，则创建后台线程来运行
+    if not loop.is_running():
+        thread = Thread(target=run_event_loop, args=(loop,))
+        thread.daemon = True
+        thread.start()
+
+    return loop
+
+
+def run_event_loop(loop: AbstractEventLoop) -> None:
+    """运行事件循环"""
+    set_event_loop(loop)
+    loop.run_forever()
