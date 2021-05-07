@@ -146,15 +146,11 @@ class WebsocketClient:
         """
         在事件循环中运行的主协程
         """
-        print(1)
-        print(self._host)
-        print(self._proxy)
         self._ws = await self._session.ws_connect(
             self._host,
             proxy=self._proxy,
             verify_ssl=False
         )
-        print(2)
 
         self.on_connected()
 
