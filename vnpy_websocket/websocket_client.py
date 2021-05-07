@@ -27,6 +27,7 @@ class WebsocketClient:
 
     def __init__(self):
         """Constructor"""
+        self._active: bool = False
         self._host: str = ""
 
         self._session: ClientSession = ClientSession()
@@ -68,6 +69,7 @@ class WebsocketClient:
 
         请等待on_connected被调用后，再发送数据包。
         """
+        self._active = True
         self._loop = start_event_loop()
         run_coroutine_threadsafe(self._run(), self._loop)
 
@@ -75,6 +77,8 @@ class WebsocketClient:
         """
         停止客户端。
         """
+        self._active = False
+
         if self._ws:
             coro = self._ws.close()
             run_coroutine_threadsafe(coro, self._loop)
@@ -94,11 +98,12 @@ class WebsocketClient:
 
         如果需要发送非json数据，请重载实现本函数。
         """
-        text: str = json.dumps(packet)
-        self._record_last_sent_text(text)
+        if self._ws:
+            text: str = json.dumps(packet)
+            self._record_last_sent_text(text)
 
-        coro: coroutine = self._ws.send_str(text)
-        run_coroutine_threadsafe(coro, self._loop)
+            coro: coroutine = self._ws.send_str(text)
+            run_coroutine_threadsafe(coro, self._loop)
 
     def unpack_data(self, data: str):
         """
@@ -146,26 +151,34 @@ class WebsocketClient:
         """
         在事件循环中运行的主协程
         """
-        self._ws = await self._session.ws_connect(
-            self._host,
-            proxy=self._proxy,
-            verify_ssl=False
-        )
+        while self._active:
+            # 发起Websocket连接
+            self._ws = await self._session.ws_connect(
+                self._host,
+                proxy=self._proxy,
+                verify_ssl=False
+            )
 
-        self.on_connected()
+            # 调用连接成功回调
+            self.on_connected()
 
-        async for msg in self._ws:
-            text: str = msg.data
-            self._record_last_received_text(text)
+            # 持续处理收到的数据
+            async for msg in self._ws:
+                text: str = msg.data
+                self._record_last_received_text(text)
 
-            try:
-                data: dict = self.unpack_data(text)
-                self.on_packet(data)
-            except Exception:
-                et, ev, tb = sys.exc_info()
-                self.on_error(et, ev, tb)
+                try:
+                    data: dict = self.unpack_data(text)
+                    self.on_packet(data)
+                except Exception:
+                    et, ev, tb = sys.exc_info()
+                    self.on_error(et, ev, tb)
 
-        self.on_disconnected()
+            # 移除Websocket连接对象
+            self._ws = None
+
+            # 调用连接断开回调
+            self.on_disconnected()
 
     def _record_last_sent_text(self, text: str):
         """记录最近发出的数据字符串"""
