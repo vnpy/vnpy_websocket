@@ -70,7 +70,11 @@ class WebsocketClient:
         请等待on_connected被调用后，再发送数据包。
         """
         self._active = True
-        self._loop = start_event_loop()
+
+        if not self._loop:
+            self._loop = get_event_loop()
+        start_event_loop(self._loop)
+
         run_coroutine_threadsafe(self._run(), self._loop)
 
     def stop(self):
@@ -191,17 +195,13 @@ class WebsocketClient:
         self._last_received_text = text[:1000]
 
 
-def start_event_loop() -> AbstractEventLoop:
+def start_event_loop(loop: AbstractEventLoop) -> AbstractEventLoop:
     """启动事件循环"""
-    loop: AbstractEventLoop = get_event_loop()
-
     # 如果事件循环未运行，则创建后台线程来运行
     if not loop.is_running():
         thread = Thread(target=run_event_loop, args=(loop,))
         thread.daemon = True
         thread.start()
-
-    return loop
 
 
 def run_event_loop(loop: AbstractEventLoop) -> None:
