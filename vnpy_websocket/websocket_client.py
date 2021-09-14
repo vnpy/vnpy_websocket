@@ -30,7 +30,7 @@ class WebsocketClient:
         self._active: bool = False
         self._host: str = ""
 
-        self._session: ClientSession = ClientSession()
+        self._session: ClientSession = ClientSession(trust_env=True)
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
 
@@ -162,7 +162,8 @@ class WebsocketClient:
                 self._ws = await self._session.ws_connect(
                     self._host,
                     proxy=self._proxy,
-                    verify_ssl=False
+                    verify_ssl=False,
+                    heartbeat= self._ping_interval
                 )
 
                 # 调用连接成功回调
