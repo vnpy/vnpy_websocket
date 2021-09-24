@@ -129,16 +129,25 @@ class WebsocketClient:
         """收到数据回调"""
         pass
 
-    def on_error(self, exception_type: type, exception_value: Exception, tb):
+    def on_error(
+        self,
+        exception_type: type,
+        exception_value: Exception,
+        tb
+    ) -> None:
         """触发异常回调"""
-        sys.stderr.write(
-            self.exception_detail(exception_type, exception_value, tb)
-        )
-        return sys.excepthook(exception_type, exception_value, tb)
+        try:
+            print("WebsocketClient on error" + "-" * 10)
+            print(self.exception_detail(exception_type, exception_value, tb))
+        except Exception:
+            traceback.print_exc()
 
     def exception_detail(
-        self, exception_type: type, exception_value: Exception, tb
-    ):
+        self,
+        exception_type: type,
+        exception_value: Exception,
+        tb
+    ) -> str:
         """异常信息格式化"""
         text = "[{}]: Unhandled WebSocket Error:{}\n".format(
             datetime.now().isoformat(), exception_type
