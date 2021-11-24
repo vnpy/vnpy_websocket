@@ -13,7 +13,7 @@
 
 ## 说明
 
-基于asyncio和aiohttp开发的协程异步Websocket API客户端，用于开发高性能的数字货币交易接口。
+基于asyncio和aiohttp开发的协程异步Websocket API客户端，用于开发高性能的Websocket交易接口。
 
 ## 安装
 
