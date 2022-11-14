@@ -5,7 +5,9 @@ from datetime import datetime
 from types import coroutine
 from threading import Thread
 from asyncio import (
-    get_event_loop,
+    get_running_loop,
+    new_event_loop,
+    set_event_loop,
     set_event_loop,
     run_coroutine_threadsafe,
     AbstractEventLoop
@@ -30,7 +32,7 @@ class WebsocketClient:
         self._active: bool = False
         self._host: str = ""
 
-        self._session: ClientSession = ClientSession()
+        self._session: ClientSession = None
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
 
@@ -71,8 +73,11 @@ class WebsocketClient:
         """
         self._active = True
 
-        if not self._loop:
-            self._loop = get_event_loop()
+        try:
+            self._loop = get_running_loop()
+        except RuntimeError:
+            self._loop = new_event_loop()
+
         start_event_loop(self._loop)
 
         run_coroutine_threadsafe(self._run(), self._loop)
@@ -164,6 +169,8 @@ class WebsocketClient:
         """
         在事件循环中运行的主协程
         """
+        self._session = ClientSession()
+
         while self._active:
             # 捕捉运行过程中异常
             try:
