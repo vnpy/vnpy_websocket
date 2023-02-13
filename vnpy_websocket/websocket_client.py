@@ -36,7 +36,7 @@ class WebsocketClient:
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
 
-        self._proxy: str = ""
+        self._proxy: str = None
         self._ping_interval: int = 60  # 秒
         self._header: dict = {}
 
