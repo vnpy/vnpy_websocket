@@ -1,6 +1,7 @@
 import json
 import sys
 import traceback
+import asyncio
 from datetime import datetime
 from types import coroutine
 from threading import Thread
@@ -35,6 +36,7 @@ class WebsocketClient:
         self._session: ClientSession = None
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
+        self._thread: Thread = None
 
         self._proxy: str = None
         self._ping_interval: int = 60  # 秒
@@ -78,7 +80,7 @@ class WebsocketClient:
         except RuntimeError:
             self._loop = new_event_loop()
 
-        start_event_loop(self._loop)
+        self._thread = start_event_loop(self._loop)
 
         run_coroutine_threadsafe(self._run(), self._loop)
 
@@ -88,18 +90,28 @@ class WebsocketClient:
         """
         self._active = False
 
+        if self._session:
+            coro = self._session.close()
+            run_coroutine_threadsafe(coro, self._loop)
+
         if self._ws:
             coro = self._ws.close()
             run_coroutine_threadsafe(coro, self._loop)
 
-        if self._loop and self._loop.is_running():
+        async def stop_loop():
+            tasks = [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+            await asyncio.gather(*tasks, return_exceptions=True)
             self._loop.stop()
+
+        if self._loop and self._loop.is_running():
+            run_coroutine_threadsafe(stop_loop(), self._loop)
 
     def join(self):
         """
         等待后台线程退出。
         """
-        pass
+        if self._thread:
+            self._thread.join(timeout=5)
 
     def send_packet(self, packet: dict):
         """
@@ -211,7 +223,7 @@ class WebsocketClient:
         self._last_received_text = text[:1000]
 
 
-def start_event_loop(loop: AbstractEventLoop) -> AbstractEventLoop:
+def start_event_loop(loop: AbstractEventLoop) -> Thread:
     """启动事件循环"""
     # 如果事件循环未运行，则创建后台线程来运行
     if not loop.is_running():
@@ -219,8 +231,11 @@ def start_event_loop(loop: AbstractEventLoop) -> AbstractEventLoop:
         thread.daemon = True
         thread.start()
 
+        return thread
+
 
 def run_event_loop(loop: AbstractEventLoop) -> None:
     """运行事件循环"""
     set_event_loop(loop)
     loop.run_forever()
+    # print("Exit run_forever thread!")
