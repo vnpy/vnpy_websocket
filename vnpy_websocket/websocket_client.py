@@ -10,10 +10,17 @@ from asyncio import (
     set_event_loop,
     set_event_loop,
     run_coroutine_threadsafe,
+    create_task,
+    wait_for,
+    TimeoutError,
     AbstractEventLoop
 )
 
-from aiohttp import ClientSession, ClientWebSocketResponse
+from aiohttp import (
+    ClientSession,
+    ClientWebSocketResponse,
+    WSMsgType
+)
 
 
 class WebsocketClient:
@@ -35,6 +42,7 @@ class WebsocketClient:
         self._session: ClientSession = None
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
+        self._receive_timeout = 30
 
         self._proxy: str = None
         self._ping_interval: int = 60  # 秒
@@ -183,18 +191,30 @@ class WebsocketClient:
 
                 # 调用连接成功回调
                 self.on_connected()
+                is_connected = True
 
-                # 持续处理收到的数据
-                async for msg in self._ws:
-                    text: str = msg.data
-                    self._record_last_received_text(text)
+                while is_connected:
+                    # 持续处理收到的数据
+                    msg = await wait_for(self._ws.receive(), timeout=self._receive_timeout)
+                    if msg.type not in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+                        text: str = msg.data
+                        self._record_last_received_text(text)
 
-                    data: dict = self.unpack_data(text)
-                    self.on_packet(data)
+                        data: dict = self.unpack_data(text)
+                        self.on_packet(data)
+                    else:
+                        is_connected = False
 
                 # 移除Websocket连接对象
                 self._ws = None
-
+                # 调用连接断开回调
+                self.on_disconnected()
+            except TimeoutError:
+                # WebSocket 接收消息超时，关闭连接，进入下个循环重连
+                # 关闭连接
+                run_coroutine_threadsafe(self._ws.close(), self._loop)
+                # 移除Websocket连接对象
+                self._ws = None
                 # 调用连接断开回调
                 self.on_disconnected()
             # 处理捕捉到的异常
