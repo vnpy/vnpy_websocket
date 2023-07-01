@@ -10,6 +10,8 @@ from asyncio import (
     set_event_loop,
     set_event_loop,
     run_coroutine_threadsafe,
+    create_task,
+    wait_for,
     TimeoutError,
     AbstractEventLoop
 )
@@ -193,7 +195,7 @@ class WebsocketClient:
 
                 while is_connected:
                     # 持续处理收到的数据
-                    msg = await self._ws.receive(timeout=self._receive_timeout)
+                    msg = await wait_for(self._ws.receive(), timeout=self._receive_timeout)
                     if msg.type not in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
                         text: str = msg.data
                         self._record_last_received_text(text)
