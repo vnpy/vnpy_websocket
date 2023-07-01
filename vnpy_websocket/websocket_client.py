@@ -10,7 +10,8 @@ from asyncio import (
     set_event_loop,
     set_event_loop,
     run_coroutine_threadsafe,
-    AbstractEventLoop
+    AbstractEventLoop,
+    TimeoutError
 )
 
 from aiohttp import ClientSession, ClientWebSocketResponse
@@ -35,6 +36,7 @@ class WebsocketClient:
         self._session: ClientSession = None
         self._ws: ClientWebSocketResponse = None
         self._loop: AbstractEventLoop = None
+        self._receive_timeout = 30
 
         self._proxy: str = None
         self._ping_interval: int = 60  # 秒
@@ -178,7 +180,8 @@ class WebsocketClient:
                 self._ws = await self._session.ws_connect(
                     self._host,
                     proxy=self._proxy,
-                    verify_ssl=False
+                    verify_ssl=False,
+                    receive_timeout=self._receive_timeout
                 )
 
                 # 调用连接成功回调
@@ -195,6 +198,13 @@ class WebsocketClient:
                 # 移除Websocket连接对象
                 self._ws = None
 
+                # 调用连接断开回调
+                self.on_disconnected()
+            # 捕获 receive 超时异常
+            except TimeoutError:
+                run_coroutine_threadsafe(self._ws.close())
+                # 移除Websocket连接对象
+                self._ws = None
                 # 调用连接断开回调
                 self.on_disconnected()
             # 处理捕捉到的异常
