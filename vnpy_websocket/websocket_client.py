@@ -202,7 +202,7 @@ class WebsocketClient:
                 self.on_disconnected()
             # 捕获 receive 超时异常
             except TimeoutError:
-                run_coroutine_threadsafe(self._ws.close())
+                run_coroutine_threadsafe(self._ws.close(), self._loop)
                 # 移除Websocket连接对象
                 self._ws = None
                 # 调用连接断开回调
