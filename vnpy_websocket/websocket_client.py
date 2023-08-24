@@ -8,7 +8,6 @@ from asyncio import (
     get_running_loop,
     new_event_loop,
     set_event_loop,
-    set_event_loop,
     run_coroutine_threadsafe,
     AbstractEventLoop
 )
@@ -87,6 +86,10 @@ class WebsocketClient:
         停止客户端。
         """
         self._active = False
+
+        if self._session:
+            coro = self._session.close()
+            run_coroutine_threadsafe(coro, self._loop)
 
         if self._ws:
             coro = self._ws.close()
