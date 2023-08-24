@@ -89,11 +89,11 @@ class WebsocketClient:
 
         if self._session:
             coro = self._session.close()
-            run_coroutine_threadsafe(coro, self._loop)
+            run_coroutine_threadsafe(coro, self._loop).result()
 
         if self._ws:
             coro = self._ws.close()
-            run_coroutine_threadsafe(coro, self._loop)
+            run_coroutine_threadsafe(coro, self._loop).result()
 
         if self._loop and self._loop.is_running():
             self._loop.stop()
