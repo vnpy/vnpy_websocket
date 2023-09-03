@@ -1,6 +1,7 @@
 import json
 import sys
 import traceback
+import platform
 from datetime import datetime
 from types import coroutine
 from threading import Thread
@@ -10,10 +11,17 @@ from asyncio import (
     set_event_loop,
     run_coroutine_threadsafe,
     AbstractEventLoop,
+    set_event_loop_policy,
     TimeoutError
 )
 
 from aiohttp import ClientSession, ClientWebSocketResponse
+
+
+# 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
+if platform.system() == 'Windows':
+    from asyncio import WindowsSelectorEventLoopPolicy
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
 class WebsocketClient:
