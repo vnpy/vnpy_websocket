@@ -15,7 +15,7 @@ from asyncio import (
     TimeoutError
 )
 
-from aiohttp import ClientSession, ClientWebSocketResponse
+from aiohttp import ClientSession, ClientWebSocketResponse, TCPConnector
 
 
 # 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
@@ -51,6 +51,8 @@ class WebsocketClient:
 
         self._last_sent_text: str = ""
         self._last_received_text: str = ""
+
+        self._local_host: str = ""
 
     def init(
         self,
@@ -176,7 +178,11 @@ class WebsocketClient:
         """
         在事件循环中运行的主协程
         """
-        self._session = ClientSession()
+        if self._local_host:
+            conn: TCPConnector = TCPConnector(local_addr=(self._local_host, 0))
+            self._session: ClientSession = ClientSession(connector=conn, trust_env=True)
+        else:
+            self._session = ClientSession()
 
         while self._active:
             # 捕捉运行过程中异常
