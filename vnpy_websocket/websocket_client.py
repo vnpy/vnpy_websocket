@@ -192,6 +192,7 @@ class WebsocketClient:
                     self._host,
                     proxy=self._proxy,
                     verify_ssl=False,
+                    heartbeat=self._ping_interval,
                     receive_timeout=self._receive_timeout
                 )
 
