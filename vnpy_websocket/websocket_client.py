@@ -4,6 +4,7 @@ import traceback
 from datetime import datetime
 from types import coroutine
 from threading import Thread
+import asyncio
 from asyncio import (
     get_running_loop,
     new_event_loop,
@@ -13,7 +14,7 @@ from asyncio import (
     AbstractEventLoop
 )
 
-from aiohttp import ClientSession, ClientWebSocketResponse
+from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType, client_exceptions
 
 
 class WebsocketClient:
@@ -37,8 +38,9 @@ class WebsocketClient:
         self._loop: AbstractEventLoop = None
 
         self._proxy: str = None
-        self._ping_interval: int = 60  # 秒
+        self._ping_interval: int = 10  # 秒
         self._header: dict = {}
+        self._receive_timeout: int = 60  # 秒
 
         self._last_sent_text: str = ""
         self._last_received_text: str = ""
@@ -170,6 +172,8 @@ class WebsocketClient:
         在事件循环中运行的主协程
         """
         self._session = ClientSession()
+        retry_delay = 0.2
+        max_retry_delay = 5
 
         while self._active:
             # 捕捉运行过程中异常
@@ -178,11 +182,14 @@ class WebsocketClient:
                 self._ws = await self._session.ws_connect(
                     self._host,
                     proxy=self._proxy,
-                    verify_ssl=False
+                    verify_ssl=False,
+                    heartbeat=self._ping_interval,
+                    receive_timeout=self._receive_timeout
                 )
 
                 # 调用连接成功回调
                 self.on_connected()
+                retry_delay = 0.2
 
                 # 持续处理收到的数据
                 async for msg in self._ws:
@@ -191,16 +198,18 @@ class WebsocketClient:
 
                     data: dict = self.unpack_data(text)
                     self.on_packet(data)
-
-                # 移除Websocket连接对象
-                self._ws = None
-
-                # 调用连接断开回调
-                self.on_disconnected()
             # 处理捕捉到的异常
-            except Exception:
+            except TimeoutError:
+                print("Timeout occurred, reconnecting...")
+            # 处理捕捉到的异常
+            except client_exceptions:
                 et, ev, tb = sys.exc_info()
                 self.on_error(et, ev, tb)
+            finally:
+                self._ws = None
+                self.on_disconnected()
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(max_retry_delay, retry_delay * 2)
 
     def _record_last_sent_text(self, text: str):
         """记录最近发出的数据字符串"""
