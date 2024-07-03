@@ -1,6 +1,7 @@
 import json
 import sys
 import traceback
+import platform
 from datetime import datetime
 from types import coroutine
 from threading import Thread
@@ -9,12 +10,19 @@ from asyncio import (
     get_running_loop,
     new_event_loop,
     set_event_loop,
-    set_event_loop,
     run_coroutine_threadsafe,
-    AbstractEventLoop
+    AbstractEventLoop,
+    set_event_loop_policy,
+    TimeoutError
 )
 
-from aiohttp import ClientSession, ClientWebSocketResponse, WSMsgType, client_exceptions
+from aiohttp import ClientSession, ClientWebSocketResponse, TCPConnector
+
+
+# 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
+if platform.system() == 'Windows':
+    from asyncio import WindowsSelectorEventLoopPolicy
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
 class WebsocketClient:
@@ -38,19 +46,22 @@ class WebsocketClient:
         self._loop: AbstractEventLoop = None
 
         self._proxy: str = None
-        self._ping_interval: int = 10  # 秒
+        self._ping_interval: int = 10       # 秒
         self._header: dict = {}
-        self._receive_timeout: int = 60  # 秒
+        self._receive_timeout: int = 60     # 秒
 
         self._last_sent_text: str = ""
         self._last_received_text: str = ""
+
+        self._local_host: str = ""
 
     def init(
         self,
         host: str,
         proxy_host: str = "",
         proxy_port: int = 0,
-        ping_interval: int = 60,
+        ping_interval: int = 10,
+        receive_timeout: int = 60,
         header: dict = None
     ):
         """
@@ -58,6 +69,7 @@ class WebsocketClient:
         """
         self._host = host
         self._ping_interval = ping_interval
+        self._receive_timeout = receive_timeout
 
         if header:
             self._header = header
@@ -89,10 +101,6 @@ class WebsocketClient:
         停止客户端。
         """
         self._active = False
-
-        if self._ws:
-            coro = self._ws.close()
-            run_coroutine_threadsafe(coro, self._loop)
 
         if self._loop and self._loop.is_running():
             self._loop.stop()
@@ -171,7 +179,11 @@ class WebsocketClient:
         """
         在事件循环中运行的主协程
         """
-        self._session = ClientSession()
+        if self._local_host:
+            conn: TCPConnector = TCPConnector(local_addr=(self._local_host, 0))
+            self._session: ClientSession = ClientSession(connector=conn, trust_env=True)
+        else:
+            self._session = ClientSession()
         retry_delay = 0.2
         max_retry_delay = 5
 
@@ -198,11 +210,14 @@ class WebsocketClient:
 
                     data: dict = self.unpack_data(text)
                     self.on_packet(data)
-            # 处理捕捉到的异常
+            # 接收数据超时重连
             except TimeoutError:
+                # 关闭当前websocket连接
                 print("Timeout occurred, reconnecting...")
+                coro = self._ws.close()
+                run_coroutine_threadsafe(coro, self._loop)
             # 处理捕捉到的异常
-            except client_exceptions:
+            except Exception:
                 et, ev, tb = sys.exc_info()
                 self.on_error(et, ev, tb)
             finally:
