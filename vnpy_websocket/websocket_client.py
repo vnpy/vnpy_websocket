@@ -5,6 +5,7 @@ import platform
 from datetime import datetime
 from types import coroutine
 from threading import Thread
+import asyncio
 from asyncio import (
     get_running_loop,
     new_event_loop,
@@ -183,6 +184,8 @@ class WebsocketClient:
             self._session: ClientSession = ClientSession(connector=conn, trust_env=True)
         else:
             self._session = ClientSession()
+        retry_delay = 0.2
+        max_retry_delay = 5
 
         while self._active:
             # 捕捉运行过程中异常
@@ -198,6 +201,7 @@ class WebsocketClient:
 
                 # 调用连接成功回调
                 self.on_connected()
+                retry_delay = 0.2
 
                 # 持续处理收到的数据
                 async for msg in self._ws:
@@ -206,27 +210,21 @@ class WebsocketClient:
 
                     data: dict = self.unpack_data(text)
                     self.on_packet(data)
-
-                # 移除Websocket连接对象
-                self._ws = None
-
-                # 调用连接断开回调
-                self.on_disconnected()
             # 接收数据超时重连
             except TimeoutError:
                 # 关闭当前websocket连接
+                print("Timeout occurred, reconnecting...")
                 coro = self._ws.close()
                 run_coroutine_threadsafe(coro, self._loop)
-
-                # 移除Websocket连接对象
-                self._ws = None
-
-                # 调用连接断开回调
-                self.on_disconnected()
             # 处理捕捉到的异常
             except Exception:
                 et, ev, tb = sys.exc_info()
                 self.on_error(et, ev, tb)
+            finally:
+                self._ws = None
+                self.on_disconnected()
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(max_retry_delay, retry_delay * 2)
 
     def _record_last_sent_text(self, text: str):
         """记录最近发出的数据字符串"""
