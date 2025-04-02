@@ -1,6 +1,6 @@
 [project]
 name = "vnpy_websocket"
-version = "1.1.0"
+dynamic = ["version"]
 description = "Websocket API client for VeighNa quant trading framework."
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,6 +37,10 @@ keywords = ["quant", "quantitative", "investment", "trading", "algotrading"]
 requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "vnpy_websocket/__init__.py"
+pattern = "__version__ = ['\"](?P<version>[^'\"]+)['\"]"
+
 [tool.hatch.build.targets.wheel]
 packages = ["vnpy_websocket"]
 include-package-data = true
@@ -59,7 +63,7 @@ select = [
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.7"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

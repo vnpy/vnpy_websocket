@@ -2,9 +2,8 @@ import json
 import ssl
 import traceback
 from threading import Thread
-from typing import Optional
 
-import websocket
+import websocket  # type: ignore
 
 
 class WebsocketClient:
@@ -33,12 +32,12 @@ class WebsocketClient:
         self.active: bool = False
         self.host: str = ""
 
-        self.wsapp: websocket.WebSocketApp = None
-        self.thread: Thread = None
+        self.wsapp: websocket.WebSocketApp | None = None
+        self.thread: Thread | None = None
 
-        self.proxy_host: Optional[str] = None
-        self.proxy_port: Optional[int] = None
-        self.header: Optional[dict] = None
+        self.proxy_host: str | None = None
+        self.proxy_port: int | None = None
+        self.header: dict | None = None
         self.ping_interval: int = 0
         self.receive_timeout: int = 0
 
@@ -51,7 +50,7 @@ class WebsocketClient:
         proxy_port: int = 0,
         ping_interval: int = 10,
         receive_timeout: int = 60,
-        header: dict = None,
+        header: dict | None = None,
         trace: bool = False
     ) -> None:
         """
@@ -92,9 +91,10 @@ class WebsocketClient:
         """
         if not self.active:
             return
-
         self.active = False
-        self.wsapp.close()
+
+        if self.wsapp:
+            self.wsapp.close()
 
     def join(self) -> None:
         """
@@ -102,7 +102,8 @@ class WebsocketClient:
 
         This function cannot be called from worker thread or callback function.
         """
-        self.thread.join()
+        if self.thread:
+            self.thread.join()
 
     def send_packet(self, packet: dict) -> None:
         """
@@ -111,7 +112,8 @@ class WebsocketClient:
         override this if you want to send non-json packet
         """
         text: str = json.dumps(packet)
-        self.wsapp.send(text)
+        if self.wsapp:
+            self.wsapp.send(text)
 
     def run(self) -> None:
         """
@@ -138,7 +140,7 @@ class WebsocketClient:
             on_message=on_message
         )
 
-        proxy_type: Optional[str] = None
+        proxy_type: str | None = None
         if self.proxy_host:
             proxy_type = "http"
 
@@ -169,7 +171,7 @@ class WebsocketClient:
         """
         pass
 
-    def on_packet(packet: dict) -> None:
+    def on_packet(self, packet: dict) -> None:
         """
         Callback when receiving data from server.
         """

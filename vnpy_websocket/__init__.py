@@ -22,10 +22,8 @@
 
 from .websocket_client import WebsocketClient
 
-import importlib_metadata
+
+__all__ = ["WebsocketClient"]
 
 
-try:
-    __version__ = importlib_metadata.version("vnpy_websocket")
-except importlib_metadata.PackageNotFoundError:
-    __version__ = "dev"
+__version__ = "1.1.0"
