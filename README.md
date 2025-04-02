@@ -5,19 +5,19 @@
 </p>
 
 <p align="center">
-    <img src ="https://img.shields.io/badge/version-1.0.6-blueviolet.svg"/>
+    <img src ="https://img.shields.io/badge/version-1.1.0-blueviolet.svg"/>
     <img src ="https://img.shields.io/badge/platform-windows|linux|macos-yellow.svg"/>
-    <img src ="https://img.shields.io/badge/python-3.8|3.9|3.10-blue.svg" />
+    <img src ="https://img.shields.io/badge/python-3.10|3.11|3.12|3.13-blue.svg" />
     <img src ="https://img.shields.io/github/license/vnpy/vnpy.svg?color=orange"/>
 </p>
 
 ## 说明
 
-基于asyncio和aiohttp开发的协程异步Websocket API客户端，用于开发高性能的Websocket交易接口。
+基于websocket-client开发的多线程Websocket API客户端，用于开发高性能的Websocket交易接口。
 
 ## 安装
 
-安装环境推荐基于3.7.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
+安装环境推荐基于4.0.0版本以上的【[**VeighNa Studio**](https://www.vnpy.com)】。
 
 直接使用pip命令：
 

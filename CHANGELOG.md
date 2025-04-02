@@ -1,3 +1,10 @@
+# 1.1.0版本
+
+1. 替换aiohttp异步通讯模式，改为使用websocket-client多线程模式
+2. 替换使用pyproject.toml配置
+3. ruff和mypy代码质量优化
+4. 
+
 # 1.0.6版本
 
 1. 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
