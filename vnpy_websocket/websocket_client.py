@@ -3,7 +3,7 @@ import ssl
 import traceback
 from threading import Thread
 
-import websocket  # type: ignore
+import websocket
 
 
 class WebsocketClient:
@@ -35,8 +35,8 @@ class WebsocketClient:
         self.wsapp: websocket.WebSocketApp | None = None
         self.thread: Thread | None = None
 
-        self.proxy_host: str | None = None
-        self.proxy_port: int | None = None
+        self.proxy_host: str = ""
+        self.proxy_port: int = 0
         self.header: dict | None = None
         self.ping_interval: int = 0
         self.receive_timeout: int = 0
@@ -119,16 +119,16 @@ class WebsocketClient:
         """
         Keep running till stop is called.
         """
-        def on_open(wsapp: websocket.WebSocketApp) -> None:
+        def on_open(wsapp: websocket.WebSocket) -> None:
             self.on_connected()
 
-        def on_close(wsapp: websocket.WebSocketApp, status_code: int, msg: str) -> None:
+        def on_close(wsapp: websocket.WebSocket, status_code: int, msg: str) -> None:
             self.on_disconnected(status_code, msg)
 
-        def on_error(wsapp: websocket.WebSocketApp, e: Exception) -> None:
+        def on_error(wsapp: websocket.WebSocket, e: Exception) -> None:
             self.on_error(e)
 
-        def on_message(wsapp: websocket.WebSocketApp, message: str) -> None:
+        def on_message(wsapp: websocket.WebSocket, message: str) -> None:
             self.on_message(message)
 
         self.wsapp = websocket.WebSocketApp(
@@ -140,7 +140,7 @@ class WebsocketClient:
             on_message=on_message
         )
 
-        proxy_type: str | None = None
+        proxy_type: str = ""
         if self.proxy_host:
             proxy_type = "http"
 
