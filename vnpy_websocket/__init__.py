@@ -26,4 +26,4 @@ from .websocket_client import WebsocketClient
 __all__ = ["WebsocketClient"]
 
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
