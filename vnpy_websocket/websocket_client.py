@@ -1,3 +1,7 @@
+"""
+Threaded websocket client that exchanges JSON packets.
+"""
+
 import json
 import ssl
 import traceback
