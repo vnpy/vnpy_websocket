@@ -6,6 +6,7 @@ import json
 import ssl
 import traceback
 from threading import Thread
+from typing import Any
 
 import websocket
 
@@ -123,16 +124,16 @@ class WebsocketClient:
         """
         Keep running till stop is called.
         """
-        def on_open(wsapp: websocket.WebSocket) -> None:
+        def on_open(wsapp: Any) -> None:
             self.on_connected()
 
-        def on_close(wsapp: websocket.WebSocket, status_code: int, msg: str) -> None:
+        def on_close(wsapp: Any, status_code: Any, msg: Any) -> None:
             self.on_disconnected(status_code, msg)
 
-        def on_error(wsapp: websocket.WebSocket, e: Exception) -> None:
+        def on_error(wsapp: Any, e: Any) -> None:
             self.on_error(e)
 
-        def on_message(wsapp: websocket.WebSocket, message: str) -> None:
+        def on_message(wsapp: Any, message: Any) -> None:
             self.on_message(message)
 
         self.wsapp = websocket.WebSocketApp(
